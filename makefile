@@ -4,7 +4,7 @@ FLAGS=
 HEADERS = 
 all: sender measure 
 
-sender: sender.o
+sender: CC.o
 	$(CC) $< -o sender 
 measure: measure.o
 	$(CC) $< -o measure -lpthread

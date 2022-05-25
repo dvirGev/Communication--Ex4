@@ -20,10 +20,10 @@
 
 #include <pthread.h>
 
-#define PORT "3490" // the port users will be connecting to
-#define MAXDATASIZE 1024 // max number of bytes we can get at once 
-#define BACKLOG 10 // how many pending connections queue will hold
-
+#define PORT "3490"      // the port users will be connecting to
+#define MAXDATASIZE 1024 // max number of bytes we can get at once
+#define BACKLOG 10       // how many pending connections queue will hold
+#define BILLION 1000000000.0
 void sigchld_handler(int s)
 {
     // waitpid() might overwrite errno, so we save and restore it:
@@ -34,10 +34,12 @@ void sigchld_handler(int s)
 
     errno = saved_errno;
 }
-void *myThreadFun(int new_fd)
+double getFile(int new_fd)
 {
+    struct timespec start, end;
+    clock_gettime(CLOCK_REALTIME, &start);
     printf("new client connect %d\n", new_fd);
-    
+
     // FILE *fptr = fopen("output.txt", "w");
     // if (fptr == NULL)
     // {
@@ -53,13 +55,15 @@ void *myThreadFun(int new_fd)
     while ((numbytes = recv(new_fd, buffer, MAXDATASIZE - 1, 0)) > 0)
     {
         buffer[numbytes] = '\0';
-        printf("%s", buffer);
+        // printf("%s", buffer);
         // fwrite(buffer, 1, numbytes, fptr);
     }
     // fclose(fptr);
     close(new_fd);
     printf("finish %d\n", new_fd);
-    return NULL;
+    clock_gettime(CLOCK_REALTIME, &end);
+    // time_spent = end - start
+    return (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / BILLION;
 }
 
 // get sockaddr, IPv4 or IPv6:
@@ -83,7 +87,7 @@ int main(void)
     int yes = 1;
     char s[INET6_ADDRSTRLEN];
     int rv;
-
+    char CC_type[20] = "cubic";
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
@@ -147,8 +151,8 @@ int main(void)
 
     printf("server: waiting for connections...\n");
 
-    while (1)
-    { // main accept() loop
+    for (size_t i = 0; i < 2; i++)
+    {
         sin_size = sizeof their_addr;
         new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
         if (new_fd == -1)
@@ -161,8 +165,15 @@ int main(void)
                   get_in_addr((struct sockaddr *)&their_addr),
                   s, sizeof s);
         printf("server: got connection from %s\n", s);
-        pthread_t th;
-        pthread_create(&th, NULL, myThreadFun, new_fd);
+
+        double averageTime = 0;
+        for (size_t j = 0; j < 5; j++)
+        { // main accept() loop
+            averageTime += getFile(new_fd);
+        }
+        printf("\033[32;1m average Time mode: \033[34m%s \033[0m is %f\n", CC_type, averageTime);
+        strcpy(CC_type, "reno");
     }
+
     return 0;
 }

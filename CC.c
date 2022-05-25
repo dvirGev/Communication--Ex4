@@ -10,9 +10,9 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h> 
 
-#define SERVER_PORT          5555 
+#define SERVER_PORT          3490
 #define SERVER_IP_ADDRESS    "127.0.0.1"
-#define FILENAME             "1mb.txt" 
+#define FILENAME             "file.txt" 
 #define FULL_SIZE 1048576
 #define BUFF_SIZE 1024
 
@@ -82,7 +82,7 @@ int main() {
 
             file_pointer = fopen(FILENAME, "r");
             if(file_pointer == NULL) {
-                fprintf(stderr, "Failed to open file 1mb.txt : %s\n", strerror(errno));
+                fprintf(stderr, "Failed to open file file.txt : %s\n", strerror(errno));
                 exit(EXIT_FAILURE);
             }
 
@@ -93,7 +93,7 @@ int main() {
             }
 
             if(size == FULL_SIZE) {
-                printf("sent all the 1MB file: %d\n",size);
+                printf("sent all the file file: %d\n",size);
             }else {
                 printf("sent just %d out of %d\n",size,FULL_SIZE);
             }

@@ -1,8 +1,5 @@
-make --dry-run --always-make --keep-going --print-directory
+make --dry-run --keep-going --print-directory
 make: Entering directory '/home/dvir/Documents/Communication/Communication--Ex4'
-gcc -c sender.c -o sender.o
-gcc sender.o -o sender 
-gcc -c measure.c -o measure.o
-gcc measure.o -o measure -lpthread
+make: Nothing to be done for 'all'.
 make: Leaving directory '/home/dvir/Documents/Communication/Communication--Ex4'
  
