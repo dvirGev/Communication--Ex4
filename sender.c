@@ -1,109 +1,109 @@
-/*
-** client.c -- a stream socket client demo
-*/
-
+//We used the attached code and websites
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
-#include <netdb.h>
-#include <sys/types.h>
-#include <netinet/in.h>
+#include <sys/types.h> 
 #include <sys/socket.h>
-
+#include <sys/stat.h>
+#include <stdlib.h> 
+#include <errno.h> 
+#include <string.h> 
 #include <arpa/inet.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h> 
 
-#define PORT "3490" // the port client will be connecting to
+#define SERVER_PORT          3490
+#define SERVER_IP_ADDRESS    "127.0.0.1"
+#define FILENAME             "file.txt" 
+#define FULL_SIZE 1048576
+#define BUFF_SIZE 1024
 
-#define MAXDATASIZE 100 // max number of bytes we can get at once
+int main() {
+   
+    char buffer[BUFF_SIZE];
+    int size_file;
+    FILE *file_pointer;
+    socklen_t length;
 
-// get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
-{
-    if (sa->sa_family == AF_INET)
-    {
-        return &(((struct sockaddr_in *)sa)->sin_addr);
-    }
-    return &(((struct sockaddr_in6 *)sa)->sin6_addr);
-}
+    int counter_runs = 0;
+    int i = 0;
+    while(i < 2) {
 
-int main(int argc, char *argv[])
-{
-    int sockfd, numbytes;
-    char buf[MAXDATASIZE];
-    struct addrinfo hints, *servinfo, *p;
-    int rv;
-    char s[INET6_ADDRSTRLEN];
+        int j = 0;
+        while(j < 5) {
+            // Create clinet socket 
+            int client_socket = socket(AF_INET, SOCK_STREAM, 0);
+            if(client_socket == -1) {
+                fprintf(stderr, "Couldn't create the socket : %s\n", strerror(errno));
+                exit(EXIT_FAILURE); // failing exit status.
+            }
 
-    if (argc != 2)
-    {
-        fprintf(stderr, "usage: client hostname\n");
-        exit(1);
-    }
+            int get_sock_opt = getsockopt(client_socket, IPPROTO_TCP, TCP_CONGESTION, buffer, &length);
+            if( get_sock_opt != 0) {
+                perror("getsockopt");
+                exit(EXIT_FAILURE); // failing exit status.
+            }
+            if(i == 0) {
+                strcpy(buffer,"cubic");
+            } else {
+                strcpy(buffer,"reno");
+            }
+            length = sizeof(buffer);
+            int set_sock_opt = setsockopt(client_socket, IPPROTO_TCP, TCP_CONGESTION, buffer, length);
+            if(set_sock_opt !=0 ) {
+                perror("setsockopt");
+                exit(EXIT_FAILURE); 
+            }
+            get_sock_opt = getsockopt(client_socket, IPPROTO_TCP, TCP_CONGESTION, buffer, &length);
+            if( get_sock_opt != 0) {
+                perror("getsockopt");
+                exit(EXIT_FAILURE); 
+            }
+            counter_runs++;
+            printf("\nclient (%d) Current CC, type: %s  \n",j, buffer);
+            
+            struct sockaddr_in server_address;
+            memset(&server_address, 0, sizeof(server_address));
+            server_address.sin_family = AF_INET;
+            server_address.sin_port = htons(SERVER_PORT);
+            int rval = inet_pton(AF_INET, (const char*)SERVER_IP_ADDRESS, &server_address.sin_addr);
 
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
+            if(rval <= 0) {
+                printf("inet_pton() failed");
+                return -1;
+            }
 
-    if ((rv = getaddrinfo(argv[1], PORT, &hints, &servinfo)) != 0)
-    {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-        return 1;
-    }
+            // Connect to the server
+            int connection = connect(client_socket, (struct sockaddr *) &server_address, sizeof(server_address));
+            if(connection == -1) {
+                fprintf(stderr, "connect() failed with error code:%s\n", strerror(errno));
+                exit(EXIT_FAILURE); // failing exit status.
+            } 
+            else {
+                printf("client %d connected to server!\n",j);
+            }
 
-    // loop through all the results and connect to the first we can
-    for (p = servinfo; p != NULL; p = p->ai_next)
-    {
-        if ((sockfd = socket(p->ai_family, p->ai_socktype,
-                             p->ai_protocol)) == -1)
-        {
-            perror("client: socket");
-            continue;
+            file_pointer = fopen(FILENAME, "r");
+            if(file_pointer == NULL) {
+                fprintf(stderr, "Failed to open file file.txt : %s\n", strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+
+            int data_stream;
+            int size = 0;
+            while( ( data_stream = fread(buffer,1,sizeof(buffer),file_pointer) ) > 0 ) {
+                size += send(client_socket, buffer, data_stream, 0);
+            }
+
+            if(size == FULL_SIZE) {
+                printf("sent all the file file: %d\n",size);
+            }else {
+                printf("sent just %d out of %d\n",size,FULL_SIZE);
+            }
+            sleep(1);
+            close(client_socket);
+            j++;
         }
-
-        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1)
-        {
-            close(sockfd);
-            perror("client: connect");
-            continue;
-        }
-
-        break;
+        i++;
     }
-
-    if (p == NULL)
-    {
-        fprintf(stderr, "client: failed to connect\n");
-        return 2;
-    }
-
-    inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
-              s, sizeof s);
-    printf("client: connecting to %s\n", s);
-
-    freeaddrinfo(servinfo); // all done with this structure
-    FILE *fptr = fopen("file.txt", "r");
-    if (fptr == NULL)
-    {
-        perror("fptr == NULL");
-    }
-    char *buffer = (char *)malloc(1024);
-    if (buffer == NULL)
-    {
-        perror("buffer == NULL");
-    }
-    while (fread(buffer, 1, sizeof(buffer), fptr) > 0)
-    {
-        // printf("length = %d\n", strlen(buffer));
-        if (send(sockfd, buffer, strlen(buffer), 0) == -1)
-        {
-            perror("send");
-        }
-    }
-
-    fclose(fptr);
-    close(sockfd);
-
     return 0;
 }
